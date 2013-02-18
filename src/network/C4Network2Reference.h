@@ -16,6 +16,7 @@
 #ifndef C4NETWORK2REFERENCE_H
 #define C4NETWORK2REFERENCE_H
 
+#include "C4NetIO.h"
 #include "C4Network2.h"
 #include "C4Network2Client.h"
 #include "C4GameParameters.h"
@@ -56,9 +57,11 @@ private:
 	// Network addresses
 	uint8_t iAddrCnt;
 	C4Network2Address Addrs[C4ClientMaxAddr];
+	C4NetIO::EndpointAddress source;
 
 public:
 	const C4Network2Address &getAddr(int i) const { return Addrs[i]; }
+	C4Network2Address &getAddr(int i) { return Addrs[i]; }
 	int getAddrCnt() const { return iAddrCnt; }
 	const char *getTitle() const { return Title.getData(); }
 	int32_t getIcon() const { return Icon; }
@@ -72,7 +75,8 @@ public:
 	int32_t getTime() const { return Time; }
 	int32_t getStartTime() const { return StartTime; }
 
-	void SetSourceIP(in_addr ip);
+	void SetSourceAddress(const C4NetIO::EndpointAddress &ip);
+	const C4NetIO::EndpointAddress &GetSourceAddress() const { return source; }
 
 	void InitLocal();
 

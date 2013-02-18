@@ -25,7 +25,10 @@
 #include <C4Game.h>
 #include <C4PlayerList.h>
 
-#ifndef _WIN32
+#ifdef _WIN32
+#include <winsock2.h>
+#include <iphlpapi.h>
+#else
 #include <arpa/inet.h>
 #include <netdb.h>
 #include <ifaddrs.h>
@@ -39,8 +42,7 @@ void C4Network2Address::CompileFunc(StdCompiler *pComp)
 	// Clear
 	if (pComp->isCompiler())
 	{
-		ZeroMem(&addr, sizeof(addr));
-		addr.sin_family = AF_INET;
+		addr.Clear();
 	}
 
 	// Write protocol
@@ -54,30 +56,22 @@ void C4Network2Address::CompileFunc(StdCompiler *pComp)
 	pComp->Value(mkEnumAdaptT<uint8_t>(eProtocol, Protocols));
 	pComp->Separator(StdCompiler::SEP_PART2); // ':'
 
-	// Write IP (no IP = 0.0.0.0)
-	in_addr zero; zero.s_addr = INADDR_ANY;
-	pComp->Value(mkDefaultAdapt(addr.sin_addr, zero));
-	pComp->Separator(StdCompiler::SEP_PART2); // ':'
-
-	// Write port
-	uint16_t iPort = htons(addr.sin_port);
-	pComp->Value(iPort);
-	addr.sin_port = htons(iPort);
+	pComp->Value(mkDefaultAdapt(addr, C4NetIO::addr_t()));
 }
 
 StdStrBuf C4Network2Address::toString() const
 {
 	switch (eProtocol)
 	{
-	case P_UDP: return FormatString("UDP:%s:%d", inet_ntoa(addr.sin_addr), htons(addr.sin_port));
-	case P_TCP: return FormatString("TCP:%s:%d", inet_ntoa(addr.sin_addr), htons(addr.sin_port));
+	case P_UDP: return FormatString("UDP:%s", addr.ToString().getData());
+	case P_TCP: return FormatString("TCP:%s", addr.ToString().getData());
 	default:  return StdStrBuf("INVALID");
 	}
 }
 
 bool C4Network2Address::operator == (const C4Network2Address &addr2) const
 {
-	return eProtocol == addr2.getProtocol() && AddrEqual(addr, addr2.getAddr());
+	return eProtocol == addr2.getProtocol() && addr == addr2.getAddr();
 }
 
 
@@ -233,30 +227,55 @@ bool C4Network2Client::AddAddr(const C4Network2Address &addr, bool fAnnounce)
 void C4Network2Client::AddLocalAddrs(int16_t iPortTCP, int16_t iPortUDP)
 {
 	// set up address struct
-	sockaddr_in addr; ZeroMem(&addr, sizeof addr);
-	addr.sin_family = AF_INET;
+	C4NetIO::addr_t addr;
 
 	// get local address(es)
-	in_addr **ppAddr = NULL;
 #ifdef HAVE_WINSOCK
-	bool fGotWinSock = AcquireWinSock();
-	if (fGotWinSock)
+	const size_t BUFFER_SIZE = 16000;
+	PIP_ADAPTER_ADDRESSES addresses = NULL;
+	for (int i = 0; i < 3; ++i)
 	{
-		// get local host name
-		char szLocalHostName[128+1]; *szLocalHostName = '\0';
-		::gethostname(szLocalHostName, 128);
-		// get hostent-struct
-		hostent *ph = ::gethostbyname(szLocalHostName);
-		// check type, get addr list
-		if (ph)
+		addresses = (PIP_ADAPTER_ADDRESSES) realloc(addresses, BUFFER_SIZE * (i+1));
+		if (!addresses)
+			// allocation failed
+			return;
+		ULONG bufsz = BUFFER_SIZE * (i+1);
+		DWORD rv = GetAdaptersAddresses(AF_UNSPEC,
+			GAA_FLAG_SKIP_ANYCAST|GAA_FLAG_SKIP_MULTICAST|GAA_FLAG_SKIP_DNS_SERVER|GAA_FLAG_SKIP_FRIENDLY_NAME,
+			NULL, addresses, &bufsz);
+		if (rv == ERROR_BUFFER_OVERFLOW)
+			// too little space, try again
+			continue;
+		if (rv != NO_ERROR)
 		{
-			if (ph->h_addrtype != AF_INET)
-				ph = NULL;
-			else
-				ppAddr = reinterpret_cast<in_addr **>(ph->h_addr_list);
+			// Something else happened
+			free(addresses);
+			return;
+		}
+		// All okay, add addresses
+		for (PIP_ADAPTER_ADDRESSES address = addresses; address; address = address->Next)
+		{
+			for (PIP_ADAPTER_UNICAST_ADDRESS unicast = address->FirstUnicastAddress; unicast; unicast = unicast->Next)
+			{
+				addr.SetHost(unicast->Address.lpSockaddr);
+				if (addr.IsLoopback())
+					continue;
+				if (iPortTCP)
+				{
+					addr.SetPort(iPortTCP);
+					AddAddr(C4Network2Address(addr, P_TCP), false);
+				}
+				if (iPortUDP)
+				{
+					addr.SetPort(iPortUDP);
+					AddAddr(C4Network2Address(addr, P_UDP), false);
+				}
+			}
 		}
 	}
+	free(addresses);
 #else
+	in_addr **ppAddr = NULL;
 	std::vector<in_addr*> addr_vec;
 	struct ifaddrs* addrs;
 	getifaddrs(&addrs);
@@ -271,29 +290,24 @@ void C4Network2Client::AddLocalAddrs(int16_t iPortTCP, int16_t iPortUDP)
 
 	addr_vec.push_back(NULL);
 	ppAddr = &addr_vec[0];
-#endif
 
 	// add address(es)
 	for (;;)
 	{
 		if (iPortTCP >= 0)
 		{
-			addr.sin_port = htons(iPortTCP);
+			addr.SetPort(iPortTCP);
 			AddAddr(C4Network2Address(addr, P_TCP), false);
 		}
 		if (iPortUDP >= 0)
 		{
-			addr.sin_port = htons(iPortUDP);
+			addr.SetPort(iPortUDP);
 			AddAddr(C4Network2Address(addr, P_UDP), false);
 		}
 		// get next
 		if (!ppAddr || !*ppAddr) break;
-		addr.sin_addr = **ppAddr++;
+		addr.SetHost(C4NetIO::HostAddress((**ppAddr++).s_addr));
 	}
-
-#ifdef HAVE_WINSOCK
-	if (fGotWinSock) ReleaseWinSock();
-#else
 	if(addrs) freeifaddrs(addrs);
 #endif
 }
@@ -303,7 +317,11 @@ void C4Network2Client::SendAddresses(C4Network2IOConnection *pConn)
 	// send all addresses
 	for (int32_t i = 0; i < iAddrCnt; i++)
 	{
-		C4NetIOPacket Pkt = MkC4NetIOPacket(PID_Addr, C4PacketAddr(getID(), Addr[i]));
+		if (Addr[i].getAddr().GetScopeId() && (!pConn || pConn->getPeerAddr().GetScopeId() != Addr[i].getAddr().GetScopeId()))
+			continue;
+		C4Network2Address addr(Addr[i]);
+		addr.getAddr().SetScopeId(0);
+		C4NetIOPacket Pkt = MkC4NetIOPacket(PID_Addr, C4PacketAddr(getID(), addr));
 		if (pConn)
 			pConn->Send(Pkt);
 		else
@@ -575,7 +593,9 @@ void C4Network2ClientList::HandlePacket(char cStatus, const C4PacketBase *pBaseP
 			C4Network2Address addr = rPkt.getAddr();
 			// IP zero? Set to IP from where the packet came
 			if (addr.isIPNull())
-				addr.SetIP(pConn->getPeerAddr().sin_addr);
+			{
+				addr.SetIP(pConn->getPeerAddr());
+			}
 			// add (no announce)
 			if (pClient->AddAddr(addr, true))
 				// new address? Try to connect

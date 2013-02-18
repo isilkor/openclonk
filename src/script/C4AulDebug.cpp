@@ -31,7 +31,6 @@
 C4AulDebug::C4AulDebug()
 		: fInit(false), fConnected(false)
 {
-	ZeroMem(&PeerAddr, sizeof PeerAddr);
 }
 
 C4AulDebug::~C4AulDebug()
@@ -123,15 +122,15 @@ bool C4AulDebug::OnConn(const C4NetIO::addr_t &AddrPeer, const C4NetIO::addr_t &
 	// Already have a connection?
 	if (fConnected) return false;
 	// Check address
-	if (AllowedAddr.sin_addr.s_addr)
-		if (AllowedAddr.sin_addr.s_addr != AddrPeer.sin_addr.s_addr ||
-		    (AllowedAddr.sin_port && AllowedAddr.sin_port != AddrPeer.sin_port))
+	if (!AllowedAddr.IsNull())
+		if (AllowedAddr.GetHost() != AddrPeer.GetHost() ||
+		    (AllowedAddr.GetPort() && AllowedAddr.GetPort() != AddrPeer.GetPort()))
 		{
-			LogF("C4AulDebug blocked connection from %s:%d", inet_ntoa(AddrPeer.sin_addr), htons(AddrPeer.sin_port));
+			LogF("C4AulDebug blocked connection from %s", AddrPeer.ToString().getData());
 			return false;
 		}
 	// Log
-	LogF("C4AulDebug got connection from %s:%d", inet_ntoa(AddrPeer.sin_addr), htons(AddrPeer.sin_port));
+	LogF("C4AulDebug got connection from %s", AddrPeer.ToString().getData());
 	// Accept connection
 	PeerAddr = AddrPeer;
 	return true;
@@ -142,7 +141,7 @@ void C4AulDebug::OnDisconn(const C4NetIO::addr_t &AddrPeer, C4NetIO *pNetIO, con
 	LogF("C4AulDebug lost connection (%s)", szReason);
 	fConnected = false;
 	eState = DS_Go;
-	ZeroMem(&PeerAddr, sizeof PeerAddr);
+	PeerAddr.Clear();
 }
 
 void C4AulDebug::OnPacket(const class C4NetIOPacket &rPacket, C4NetIO *pNetIO)
@@ -153,7 +152,7 @@ void C4AulDebug::OnPacket(const class C4NetIOPacket &rPacket, C4NetIO *pNetIO)
 bool C4AulDebug::SetAllowed(const char *szHost)
 {
 	// Clear
-	ZeroMem(&AllowedAddr, sizeof(AllowedAddr));
+	AllowedAddr.Clear();
 	// No host?
 	if (!szHost || !*szHost) return true;
 	// Resolve the address
@@ -163,7 +162,7 @@ bool C4AulDebug::SetAllowed(const char *szHost)
 bool C4AulDebug::Init(uint16_t iPort)
 {
 	if (fInit) Close();
-	if (iPort == P_NONE) return false;
+	if (iPort == EndpointAddress::IPPORT_NONE) return false;
 
 	// Register self as callback for network events
 	C4NetIOTCP::SetCallback(this);

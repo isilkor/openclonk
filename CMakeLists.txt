@@ -1354,6 +1354,7 @@ if (WIN32)
 		set(HAVE_VFW32 TRUE)
 	endif()
 
+	target_link_libraries(libmisc iphlpapi)
 	target_link_libraries(openclonk ws2_32 winmm)
 	target_link_libraries(c4group ws2_32)
 	target_link_libraries(netpuncher ws2_32 winmm)

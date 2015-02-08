@@ -22,22 +22,51 @@ set(C4SCRIPT_SOURCES
 	../src/script/C4ScriptStandalone.cpp
 )
 
-# Look for GTest's CMake project
+# Look for GTest and GMock
+# GMock's source package ships GTest too, so look for it first
+find_path(GMOCK_ROOT
+    NAMES "src/gmock-all.cc" "gmock/gmock-all.cc"
+    PATHS "/usr/src/gmock"
+    )
+find_path(GMOCK_INCLUDE_DIR
+    NAMES "gmock/gmock.h"
+    HINTS "${GMOCK_ROOT}"
+    PATH_SUFFIXES "include"
+    )
+find_file(GMOCK_SOURCE_ALL
+    NAMES "gmock-all.cc"
+    HINTS "${GMOCK_ROOT}"
+    PATH_SUFFIXES "src" "gtest"
+    NO_DEFAULT_PATH
+    )
+
 find_path(GTEST_ROOT
-    NAMES src/gtest-all.cc gtest/gtest-all.cc
-    PATHS /usr/src/gtest
+    NAMES "src/gtest-all.cc" "gtest/gtest-all.cc"
+    PATHS "${GMOCK_ROOT}" "/usr/src/gtest"
     )
 find_path(GTEST_INCLUDE_DIR
-    NAMES gtest/gtest.h
+    NAMES "gtest/gtest.h"
     HINTS "${GTEST_ROOT}"
     PATH_SUFFIXES "include"
     )
 find_file(GTEST_SOURCE_ALL
-    NAMES gtest-all.cc
+    NAMES "gtest-all.cc"
     HINTS "${GTEST_ROOT}"
-    PATH_SUFFIXES src gtest
+    PATH_SUFFIXES "src" "gtest"
     NO_DEFAULT_PATH
     )
+
+if (GMOCK_SOURCE_ALL AND GMOCK_INCLUDE_DIR)
+    add_library(gmock STATIC
+        "${GMOCK_SOURCE_ALL}"
+        "${GMOCK_INCLUDE_DIR}/gmock/gmock.h"
+        )
+    if (GMOCK_ROOT)
+        include_directories("${GMOCK_ROOT}")
+    endif()
+    include_directories("${GMOCK_INCLUDE_DIR}")
+    set(GMOCK_FOUND 1)
+endif()
 
 if (GTEST_SOURCE_ALL AND GTEST_INCLUDE_DIR)
     add_library(gtest STATIC
@@ -51,7 +80,19 @@ if (GTEST_SOURCE_ALL AND GTEST_INCLUDE_DIR)
     set(GTEST_FOUND 1)
 endif()
 
-if (GTEST_FOUND)
+include(CMakeParseArguments)
+function(create_test testName)
+    set(oneValueArgs "")
+    set(multiValueArgs SOURCES LIBRARIES)
+    CMAKE_PARSE_ARGUMENTS(CT "" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
+    add_executable("${testName}" ${CT_SOURCES} main.cpp)
+    target_link_libraries("${testName}" gtest gmock ${CT_LIBRARIES})
+    add_test(NAME "${testName}" COMMAND "${testName}")
+endfunction()
+
+if (GTEST_FOUND AND GMOCK_FOUND)
+    enable_testing()
+
     AUX_SOURCE_DIRECTORY("${CMAKE_CURRENT_LIST_DIR}" TESTS_SOURCES)
     add_executable(tests ${TESTS_SOURCES} ${C4SCRIPT_SOURCES})
     target_link_libraries(tests gtest libc4script libmisc)
@@ -72,5 +113,11 @@ else()
     if (NOT GTEST_SOURCE_ALL)
         set(_gtest_missing "${_gtest_missing} gtest-all.cc")
     endif()
-    message(STATUS "Could NOT find Gtest (missing:${_gtest_missing})")
+    if (NOT GMOCK_INCLUDE_DIR)
+        set(_gtest_missing "${_gtest_missing} gmock/gmock.h")
+    endif()
+    if (NOT GMOCK_SOURCE_ALL)
+        set(_gtest_missing "${_gtest_missing} gmock-all.cc")
+    endif()
+    message(STATUS "Could NOT find GTest/GMock (missing:${_gtest_missing})")
 endif()

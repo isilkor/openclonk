@@ -800,9 +800,9 @@ void CStdGL::PerformMesh(StdMeshInstance &instance, float tx, float ty, float tw
 	// (TODO: We should cache this, not sure where though)
 	// TODO: Note that this does not generally work with an arbitrary transformation this way
 	const StdMeshBox& box = mesh.GetBoundingBox();
-	StdMeshVector v1, v2;
-	v1.x = box.x1; v1.y = box.y1; v1.z = box.z1;
-	v2.x = box.x2; v2.y = box.y2; v2.z = box.z2;
+	StdMeshVector v1 { box.x1, box.y1, box.z1 };
+	StdMeshVector v2 { box.x2, box.y2, box.z2 };
+
 	v1 = OgreToClonk * v1; // TODO: Include translation
 	v2 = OgreToClonk * v2; // TODO: Include translation
 
@@ -834,9 +834,10 @@ void CStdGL::PerformMesh(StdMeshInstance &instance, float tx, float ty, float tw
 	glPushMatrix();
 
 	// Mesh extents
-	const float b = fabs(v2.x - v1.x)/2.0f;
-	const float h = fabs(v2.y - v1.y)/2.0f;
-	const float l = fabs(v2.z - v1.z)/2.0f;
+	StdMeshVector extents = (v2 - v1).abs() / 2.0f;
+	const float b = extents.x();
+	const float h = extents.y();
+	const float l = extents.z();
 
 	if (!fUsePerspective)
 	{
@@ -847,8 +848,8 @@ void CStdGL::PerformMesh(StdMeshInstance &instance, float tx, float ty, float tw
 			parity = !parity;
 
 		// Scale so that the mesh fits in (tx,ty,twdt,thgt)
-		const float rx = -std::min(v1.x,v2.x) / fabs(v2.x - v1.x);
-		const float ry = -std::min(v1.y,v2.y) / fabs(v2.y - v1.y);
+		const float rx = -std::min(v1.x(),v2.x()) / fabs(v2.x() - v1.x());
+		const float ry = -std::min(v1.y(),v2.y()) / fabs(v2.y() - v1.y());
 		const float dx = tx + rx*twdt;
 		const float dy = ty + ry*thgt;
 
@@ -937,9 +938,9 @@ void CStdGL::PerformMesh(StdMeshInstance &instance, float tx, float ty, float tw
 		// Setup camera position so that the mesh with uniform transformation
 		// fits well into a square target (without distortion).
 		const float EyeR = l + std::max(b/TAN_FOV, h/TAN_FOV);
-		const float EyeX = MeshCenter.x;
-		const float EyeY = MeshCenter.y;
-		const float EyeZ = MeshCenter.z + EyeR;
+		const float EyeX = MeshCenter.x();
+		const float EyeY = MeshCenter.y();
+		const float EyeZ = MeshCenter.z() + EyeR;
 
 		// Up vector is unit vector in theta direction
 		const float UpX = 0;//-sinEyePhi * sinEyeTheta;
@@ -949,7 +950,7 @@ void CStdGL::PerformMesh(StdMeshInstance &instance, float tx, float ty, float tw
 		// Fix X axis (???)
 		glScalef(-1.0f, 1.0f, 1.0f);
 		// center on mesh's bounding box, so that the mesh is really in the center of the viewport
-		gluLookAt(EyeX, EyeY, EyeZ, MeshCenter.x, MeshCenter.y, MeshCenter.z, UpX, UpY, UpZ);
+		gluLookAt(EyeX, EyeY, EyeZ, MeshCenter.x(), MeshCenter.y(), MeshCenter.z(), UpX, UpY, UpZ);
 	}
 
 	// Apply mesh transformation matrix

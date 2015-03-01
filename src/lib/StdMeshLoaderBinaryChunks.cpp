@@ -399,9 +399,9 @@ namespace Ogre
 		{
 			name = stream->Read<std::string>();
 			handle = stream->Read<uint16_t>();
-			position.x = stream->Read<float>();
-			position.y = stream->Read<float>();
-			position.z = stream->Read<float>();
+			position.setX(stream->Read<float>());
+			position.setY(stream->Read<float>());
+			position.setZ(stream->Read<float>());
 			orientation.x = stream->Read<float>();
 			orientation.y = stream->Read<float>();
 			orientation.z = stream->Read<float>();
@@ -409,9 +409,9 @@ namespace Ogre
 			// Guess whether we have a scale element
 			if (GetSize() > name.size() + 1 + sizeof(handle) + sizeof(float) * 7)
 			{
-				scale.x = stream->Read<float>();
-				scale.y = stream->Read<float>();
-				scale.z = stream->Read<float>();
+				scale.setX(stream->Read<float>());
+				scale.setY(stream->Read<float>());
+				scale.setZ(stream->Read<float>());
 			}
 			else
 			{
@@ -472,15 +472,15 @@ namespace Ogre
 			rotation.y = stream->Read<float>();
 			rotation.z = stream->Read<float>();
 			rotation.w = stream->Read<float>();
-			translation.x = stream->Read<float>();
-			translation.y = stream->Read<float>();
-			translation.z = stream->Read<float>();
+			translation.setX(stream->Read<float>());
+			translation.setY(stream->Read<float>());
+			translation.setZ(stream->Read<float>());
 			// Guess whether we have a scale element
 			if (GetSize() > sizeof(float) * 8)
 			{
-				scale.x = stream->Read<float>();
-				scale.y = stream->Read<float>();
-				scale.z = stream->Read<float>();
+				scale.setX(stream->Read<float>());
+				scale.setY(stream->Read<float>());
+				scale.setZ(stream->Read<float>());
 			}
 			else
 			{
@@ -491,9 +491,9 @@ namespace Ogre
 		void ChunkAnimationLink::ReadImpl(DataStream *stream)
 		{
 			file = stream->Read<std::string>();
-			scale.x = stream->Read<float>();
-			scale.y = stream->Read<float>();
-			scale.z = stream->Read<float>();
+			scale.setX(stream->Read<float>());
+			scale.setY(stream->Read<float>());
+			scale.setZ(stream->Read<float>());
 		}
 	}
 }

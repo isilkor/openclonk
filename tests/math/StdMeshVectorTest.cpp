@@ -23,14 +23,14 @@
 
 void PrintTo(const StdMeshVector &vec, ::std::ostream *os)
 {
-	*os << "{ " << vec.x << ", " << vec.y << ", " << vec.z << " }";
+	*os << "{ " << vec.x() << ", " << vec.y() << ", " << vec.z() << " }";
 }
 
 auto VectorEq = [](float x, float y, float z) {
 	return ::testing::AllOf(
-		::testing::Field(&StdMeshVector::x, ::testing::FloatEq(x)),
-		::testing::Field(&StdMeshVector::y, ::testing::FloatEq(y)),
-		::testing::Field(&StdMeshVector::z, ::testing::FloatEq(z))
+		::testing::Property(&StdMeshVector::x, ::testing::FloatEq(x)),
+		::testing::Property(&StdMeshVector::y, ::testing::FloatEq(y)),
+		::testing::Property(&StdMeshVector::z, ::testing::FloatEq(z))
 		);
 };
 
@@ -44,6 +44,18 @@ TEST(StdMeshVector, InitializerTest)
 
 	StdMeshVector xl = StdMeshVector::Translate(4.0f, 29.0f, 15.0f);
 	EXPECT_THAT(xl, VectorEq(4.0f, 29.0f, 15.0f));
+}
+
+TEST(StdMeshVector, LoadTest)
+{
+	StdMeshVector v1(1.0f, 2.0f, 3.0f);
+	StdMeshVector v2(1.0f, 2.0f, 3.0f);
+
+	EXPECT_EQ(v1, v2);
+
+	StdMeshVector v3 = StdMeshVector::Zero();
+	v3.setX(v1.x()); v3.setY(v1.y()); v3.setZ(v1.z());
+	EXPECT_EQ(v1, v3);
 }
 
 TEST(StdMeshVector, VecOpVecTest)
@@ -97,4 +109,10 @@ TEST(StdMeshVector, VecOpFloatTest)
 	EXPECT_THAT(c11, VectorEq(0.0f, 0.0f, 0.0f));
 
 	EXPECT_THAT(-v1, VectorEq(-1.0f, -3.0f, -7.0f));
+
+	EXPECT_THAT(v1.abs(), VectorEq(1.0f, 3.0f, 7.0f));
+	EXPECT_THAT((-v1).abs(), VectorEq(1.0f, 3.0f, 7.0f));
+
+	const StdMeshVector v5{ 4.0f, 4.0f, 4.0f };
+	EXPECT_THAT(v5.normalized(), VectorEq(0.57735f, 0.57735f, 0.57735f));
 }

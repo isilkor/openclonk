@@ -589,9 +589,9 @@ namespace Ogre
 			std::string name;
 			uint16_t handle;
 
-			StdMeshVector position;
+			StdMeshVector position = StdMeshVector::Zero();
 			StdMeshQuaternion orientation;
-			StdMeshVector scale;
+			StdMeshVector scale = StdMeshVector::UnitScale();
 		protected:
 			virtual void ReadImpl(DataStream *stream);
 		};
@@ -638,8 +638,8 @@ namespace Ogre
 		public:
 			float time;
 			StdMeshQuaternion rotation;
-			StdMeshVector translation;
-			StdMeshVector scale;
+			StdMeshVector translation = StdMeshVector::Zero();
+			StdMeshVector scale = StdMeshVector::UnitScale();
 		protected:
 			virtual void ReadImpl(DataStream *stream);
 		};
@@ -648,7 +648,7 @@ namespace Ogre
 		{
 		public:
 			std::string file;
-			StdMeshVector scale;
+			StdMeshVector scale = StdMeshVector::UnitScale();
 		protected:
 			virtual void ReadImpl(DataStream *stream);
 		};

@@ -2222,26 +2222,22 @@ static bool FnCreateParticleAtBone(C4Object* Obj, C4String* szName, C4String* sz
 	Obj->pMeshInstance->UpdateBoneTransforms();
 	const StdMeshMatrix transform = Obj->pMeshInstance->GetBoneTransform(bone->Index) * StdMeshMatrix::Transform(bone->Transformation);
 	// Get offset and direction
-	StdMeshVector x, dir;
+	StdMeshVector x = StdMeshVector::Zero(), dir = StdMeshVector::Zero();
 	if(Pos)
 	{
 		if(Pos->GetSize() != 3)
 			throw new C4AulExecError("CreateParticleAtBone: Pos is not a three-vector");
-		x.x = (*Pos)[0].getInt();
-		x.y = (*Pos)[1].getInt();
-		x.z = (*Pos)[2].getInt();
+		x.set((*Pos)[0].getInt(), (*Pos)[1].getInt(), (*Pos)[2].getInt());
 	}
-	else { x.x = x.y = x.z = 0.0f; }
 
 	if(Dir)
 	{
 		if(Dir->GetSize() != 3)
 			throw new C4AulExecError("CreateParticleAtBone: Dir is not a three-vector");
-		dir.x = (*Dir)[0].getInt() / 10.0f;
-		dir.y = (*Dir)[1].getInt() / 10.0f;
-		dir.z = (*Dir)[2].getInt() / 10.0f;
+		dir.set((*Dir)[0].getInt(), (*Dir)[1].getInt(), (*Dir)[2].getInt());
+		dir /= 10.0f;
 	}
-	else { dir.x = dir.y = dir.z = 0.0f; }
+
 	// Apply the bone transformation to them, to go from bone coordinates
 	// to mesh coordinates (note that bone coordinates use the OGRE
 	// coordinate system, so they need to be transformed to Clonk coordinates).
@@ -2249,9 +2245,7 @@ static bool FnCreateParticleAtBone(C4Object* Obj, C4String* szName, C4String* sz
 	// This is a good example why we should have different types for
 	// position vectors and displacement vectors. TODO.
 	StdMeshVector transformed_x = transform * (ClonkToOgre * x);
-	transformed_x.x += transform(0,3);
-	transformed_x.y += transform(1,3);
-	transformed_x.z += transform(2,3);
+	transformed_x += StdMeshVector(transform(0,3), transform(1,3), transform(2,3));
 	x = C4Draw::OgreToClonk * transformed_x;
 	dir = C4Draw::OgreToClonk * (transform * (ClonkToOgre * dir));
 	// Apply MeshTransformation in the mesh reference frame
@@ -2262,33 +2256,29 @@ static bool FnCreateParticleAtBone(C4Object* Obj, C4String* szName, C4String* sz
 		MeshTransform = StdMeshMatrix::Identity();
 	x = MeshTransform * x;
 	dir = MeshTransform * dir;
-	x.x += MeshTransform(0,3);
-	x.y += MeshTransform(1,3);
-	x.z += MeshTransform(2,3);
+	x += StdMeshVector(MeshTransform(0,3), MeshTransform(1,3), MeshTransform(2,3));
 	// Now go to world coordinates -- this code is copied from and needs to
 	// stay in sync with C4DrawGL::PerformMesh, so the particles are
 	// created at the correct position.
 	// TODO: This should be moved into a common function.
 	const StdMeshBox& box = mesh.GetBoundingBox();
-	StdMeshVector v1, v2;
-	v1.x = box.x1; v1.y = box.y1; v1.z = box.z1;
-	v2.x = box.x2; v2.y = box.y2; v2.z = box.z2;
+	StdMeshVector v1(box.x1, box.y1, box.z1);
+	StdMeshVector v2(box.x2, box.y2, box.z2);
+
 	v1 = C4Draw::OgreToClonk * v1; // TODO: Include translation
 	v2 = C4Draw::OgreToClonk * v2; // TODO: Include translation
 	const float tx = fixtof(Obj->fix_x) + Obj->Def->Shape.GetX();
 	const float ty = fixtof(Obj->fix_y) + Obj->Def->Shape.GetY();
 	const float twdt = Obj->Def->Shape.Wdt;
 	const float thgt = Obj->Def->Shape.Hgt;
-	const float rx = -std::min(v1.x,v2.x) / fabs(v2.x - v1.x);
-	const float ry = -std::min(v1.y,v2.y) / fabs(v2.y - v1.y);
+	const float rx = -std::min(v1.x(),v2.x()) / fabs(v2.x() - v1.x());
+	const float ry = -std::min(v1.y(),v2.y()) / fabs(v2.y() - v1.y());
 	const float dx = tx + rx*twdt;
 	const float dy = ty + ry*thgt;
-	x.x += dx;
-	x.y += dy;
+	x += StdMeshVector(dx, dy, 0);
 	// This was added in the block before and could also just be removed from tx/ty.
 	// However, the block would no longer be equal to where it came from.
-	x.x -= fixtof(Obj->fix_x);
-	x.y -= fixtof(Obj->fix_y);
+	x -= StdMeshVector(fixtof(Obj->fix_x), fixtof(Obj->fix_y), 0);
 	// Finally, apply DrawTransform to the world coordinates,
 	// and incorporate object rotation into the transformation
 	C4DrawTransform draw_transform;
@@ -2318,16 +2308,14 @@ static bool FnCreateParticleAtBone(C4Object* Obj, C4String* szName, C4String* sz
 
 	x = DrawTransform * x;
 	dir = DrawTransform * dir;
-	x.x += DrawTransform(0,3);
-	x.y += DrawTransform(1,3);
-	x.z += DrawTransform(2,3);
+	x += StdMeshVector(DrawTransform(0,3), DrawTransform(1,3), DrawTransform(2,3));
 
 	// construct data
 	C4ParticleValueProvider valueX, valueY, valueSpeedX, valueSpeedY, valueLifetime;
-	valueX.Set(x.x);
-	valueY.Set(x.y);
-	valueSpeedX.Set(dir.x);
-	valueSpeedY.Set(dir.y);
+	valueX.Set(x.x());
+	valueY.Set(x.y());
+	valueSpeedX.Set(dir.x());
+	valueSpeedY.Set(dir.y());
 	valueLifetime.Set(lifetime);
 
 	// cast

@@ -412,15 +412,17 @@ void StdMeshSkeletonLoader::LoadSkeletonXml(const char* groupname, const char* f
 		TiXmlElement* rotation_elem = skeleton->RequireFirstChild(bone_elem, "rotation");
 		TiXmlElement* axis_elem = skeleton->RequireFirstChild(rotation_elem, "axis");
 
-		StdMeshVector d, r;
-		d.x = skeleton->RequireFloatAttribute(position_elem, "x");
-		d.y = skeleton->RequireFloatAttribute(position_elem, "y");
-		d.z = skeleton->RequireFloatAttribute(position_elem, "z");
+		StdMeshVector d {
+			skeleton->RequireFloatAttribute(position_elem, "x"),
+			skeleton->RequireFloatAttribute(position_elem, "y"),
+			skeleton->RequireFloatAttribute(position_elem, "z")
+		};
 		float angle = skeleton->RequireFloatAttribute(rotation_elem, "angle");
-		r.x = skeleton->RequireFloatAttribute(axis_elem, "x");
-		r.y = skeleton->RequireFloatAttribute(axis_elem, "y");
-		r.z = skeleton->RequireFloatAttribute(axis_elem, "z");
-
+		StdMeshVector r {
+			skeleton->RequireFloatAttribute(axis_elem, "x"),
+			skeleton->RequireFloatAttribute(axis_elem, "y"),
+			skeleton->RequireFloatAttribute(axis_elem, "z")
+		};
 		bone->Transformation.scale = StdMeshVector::UnitScale();
 		bone->Transformation.rotate = StdMeshQuaternion::AngleAxis(angle, r);
 		bone->Transformation.translate = d;
@@ -502,33 +504,38 @@ void StdMeshSkeletonLoader::LoadSkeletonXml(const char* groupname, const char* f
 					TiXmlElement* rotate_elem = keyframe_elem->FirstChildElement("rotate");
 					TiXmlElement* scale_elem = keyframe_elem->FirstChildElement("scale");
 
-					StdMeshVector d, s, r;
-					d.x = d.y = d.z = 0.0f;
-					s = StdMeshVector::UnitScale();
-					r.x = r.y = 0.0f; r.z = 1.0f;
+					StdMeshVector d = StdMeshVector::Zero();
+					StdMeshVector s = StdMeshVector::UnitScale();
+					StdMeshVector r { 0.0f, 0.0f, 1.0f };
 					float angle = 0.0f;
 
 					if (translate_elem)
 					{
-						d.x = skeleton->RequireFloatAttribute(translate_elem, "x");
-						d.y = skeleton->RequireFloatAttribute(translate_elem, "y");
-						d.z = skeleton->RequireFloatAttribute(translate_elem, "z");
+						d = StdMeshVector {
+							skeleton->RequireFloatAttribute(translate_elem, "x"),
+							skeleton->RequireFloatAttribute(translate_elem, "y"),
+							skeleton->RequireFloatAttribute(translate_elem, "z")
+						};
 					}
 
 					if (rotate_elem)
 					{
 						TiXmlElement* axis_elem = skeleton->RequireFirstChild(rotate_elem, "axis");
 						angle = skeleton->RequireFloatAttribute(rotate_elem, "angle");
-						r.x = skeleton->RequireFloatAttribute(axis_elem, "x");
-						r.y = skeleton->RequireFloatAttribute(axis_elem, "y");
-						r.z = skeleton->RequireFloatAttribute(axis_elem, "z");
+						r = StdMeshVector {
+							skeleton->RequireFloatAttribute(axis_elem, "x"),
+							skeleton->RequireFloatAttribute(axis_elem, "y"),
+							skeleton->RequireFloatAttribute(axis_elem, "z")
+						};
 					}
 
 					if (scale_elem)
 					{
-						s.x = skeleton->RequireFloatAttribute(scale_elem, "x");
-						s.y = skeleton->RequireFloatAttribute(scale_elem, "y");
-						s.z = skeleton->RequireFloatAttribute(scale_elem, "z");
+						s = StdMeshVector {
+							skeleton->RequireFloatAttribute(scale_elem, "x"),
+							skeleton->RequireFloatAttribute(scale_elem, "y"),
+							skeleton->RequireFloatAttribute(scale_elem, "z")
+						};
 					}
 
 					frame.Transformation.scale = s;

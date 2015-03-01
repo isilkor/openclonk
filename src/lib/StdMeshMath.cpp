@@ -2,7 +2,7 @@
  * OpenClonk, http://www.openclonk.org
  *
  * Copyright (c) 2001-2009, RedWolf Design GmbH, http://www.clonk.de/
- * Copyright (c) 2009-2013, The OpenClonk Team and contributors
+ * Copyright (c) 2009-2015, The OpenClonk Team and contributors
  *
  * Distributed under the terms of the ISC license; see accompanying file
  * "COPYING" for details.
@@ -23,42 +23,6 @@
 
 #include <StdMeshMath.h>
 
-StdMeshVector StdMeshVector::Zero()
-{
-	StdMeshVector v;
-	v.x = 0.0f;
-	v.y = 0.0f;
-	v.z = 0.0f;
-	return v;
-}
-
-StdMeshVector StdMeshVector::UnitScale()
-{
-	StdMeshVector v;
-	v.x = 1.0f;
-	v.y = 1.0f;
-	v.z = 1.0f;
-	return v;
-}
-
-StdMeshVector StdMeshVector::Translate(float dx, float dy, float dz)
-{
-	StdMeshVector v;
-	v.x = dx;
-	v.y = dy;
-	v.z = dz;
-	return v;
-}
-
-StdMeshVector StdMeshVector::Cross(const StdMeshVector& lhs, const StdMeshVector& rhs)
-{
-	StdMeshVector v;
-	v.x = lhs.y*rhs.z - lhs.z*rhs.y;
-	v.y = lhs.z*rhs.x - lhs.x*rhs.z;
-	v.z = lhs.x*rhs.y - lhs.y*rhs.x;
-	return v;
-}
-
 StdMeshQuaternion StdMeshQuaternion::Zero()
 {
 	StdMeshQuaternion q;
@@ -75,9 +39,9 @@ StdMeshQuaternion StdMeshQuaternion::AngleAxis(float theta, const StdMeshVector&
 	const float theta2 = theta/2.0f;
 	const float s = sin(theta2);
 	q.w = cos(theta2);
-	q.x = s*axis.x;
-	q.y = s*axis.y;
-	q.z = s*axis.z;
+	q.x = s*axis.x();
+	q.y = s*axis.y();
+	q.z = s*axis.z();
 	return q;
 }
 
@@ -284,19 +248,19 @@ StdMeshMatrix StdMeshMatrix::Transform(const StdMeshTransformation& transform)
 	float tyz = tz*transform.rotate.y;
 	float tzz = tz*transform.rotate.z;
 
-	m.a[0][0] = (1.0f - (tyy + tzz) ) * transform.scale.x;
-	m.a[0][1] = (txy - twz)           * transform.scale.y;
-	m.a[0][2] = (txz + twy)           * transform.scale.z;
-	m.a[1][0] = (txy + twz)           * transform.scale.x;
-	m.a[1][1] = (1.0f - (txx + tzz) ) * transform.scale.y;
-	m.a[1][2] = (tyz - twx)           * transform.scale.z;
-	m.a[2][0] = (txz - twy)           * transform.scale.x;
-	m.a[2][1] = (tyz + twx)           * transform.scale.y;
-	m.a[2][2] = (1.0f - (txx + tyy) ) * transform.scale.z;
+	m.a[0][0] = (1.0f - (tyy + tzz) ) * transform.scale.x();
+	m.a[0][1] = (txy - twz)           * transform.scale.y();
+	m.a[0][2] = (txz + twy)           * transform.scale.z();
+	m.a[1][0] = (txy + twz)           * transform.scale.x();
+	m.a[1][1] = (1.0f - (txx + tzz) ) * transform.scale.y();
+	m.a[1][2] = (tyz - twx)           * transform.scale.z();
+	m.a[2][0] = (txz - twy)           * transform.scale.x();
+	m.a[2][1] = (tyz + twx)           * transform.scale.y();
+	m.a[2][2] = (1.0f - (txx + tyy) ) * transform.scale.z();
 
-	m.a[0][3] = transform.translate.x;
-	m.a[1][3] = transform.translate.y;
-	m.a[2][3] = transform.translate.z;
+	m.a[0][3] = transform.translate.x();
+	m.a[1][3] = transform.translate.y();
+	m.a[2][3] = transform.translate.z();
 
 	return m;
 }
@@ -318,22 +282,22 @@ StdMeshMatrix StdMeshMatrix::TransformInverse(const StdMeshTransformation& trans
 	float tyz = tz*transform.rotate.y;
 	float tzz = tz*transform.rotate.z;
 
-	m.a[0][0] = (1.0f - (tyy + tzz) ) / transform.scale.x;
-	m.a[0][1] = (txy - twz)           / transform.scale.x;
-	m.a[0][2] = (txz + twy)           / transform.scale.x;
-	m.a[1][0] = (txy + twz)           / transform.scale.y;
-	m.a[1][1] = (1.0f - (txx + tzz) ) / transform.scale.y;
-	m.a[1][2] = (tyz - twx)           / transform.scale.y;
-	m.a[2][0] = (txz - twy)           / transform.scale.z;
-	m.a[2][1] = (tyz + twx)           / transform.scale.z;
-	m.a[2][2] = (1.0f - (txx + tyy) ) / transform.scale.z;
+	m.a[0][0] = (1.0f - (tyy + tzz) ) / transform.scale.x();
+	m.a[0][1] = (txy - twz)           / transform.scale.x();
+	m.a[0][2] = (txz + twy)           / transform.scale.x();
+	m.a[1][0] = (txy + twz)           / transform.scale.y();
+	m.a[1][1] = (1.0f - (txx + tzz) ) / transform.scale.y();
+	m.a[1][2] = (tyz - twx)           / transform.scale.y();
+	m.a[2][0] = (txz - twy)           / transform.scale.z();
+	m.a[2][1] = (tyz + twx)           / transform.scale.z();
+	m.a[2][2] = (1.0f - (txx + tyy) ) / transform.scale.z();
 
 	// Signs do not cancel!
 	StdMeshVector invtranslate = (-transform.rotate) * (-transform.translate/transform.scale);
 
-	m.a[0][3] = invtranslate.x;
-	m.a[1][3] = invtranslate.y;
-	m.a[2][3] = invtranslate.z;
+	m.a[0][3] = invtranslate.x();
+	m.a[1][3] = invtranslate.y();
+	m.a[2][3] = invtranslate.z();
 
 	return m;
 }
@@ -369,13 +333,9 @@ StdMeshTransformation StdMeshMatrix::Decompose() const
 	const float rz = (rot.a[1][0] - rot.a[0][1]) / det;
 
 	StdMeshTransformation trans;
-	trans.scale.x = sx;
-	trans.scale.y = sy;
-	trans.scale.z = sz;
+	trans.scale.set(sx, sy, sz);
 	trans.rotate = StdMeshQuaternion::AngleAxis(acos(cos_angle), StdMeshVector::Translate(rx, ry, rz));
-	trans.translate.x = a[0][3];
-	trans.translate.y = a[1][3];
-	trans.translate.z = a[2][3];
+	trans.translate.set(a[0][3], a[1][3], a[2][3]);
 
 	return trans;
 }
@@ -526,92 +486,13 @@ StdMeshTransformation operator*(const StdMeshTransformation& lhs, const StdMeshT
 	return t;
 }
 
-StdMeshVector operator-(const StdMeshVector& rhs)
-{
-	StdMeshVector v;
-	v.x = -rhs.x;
-	v.y = -rhs.y;
-	v.z = -rhs.z;
-	return v;
-}
-
-StdMeshVector& operator+=(StdMeshVector& lhs, const StdMeshVector& rhs)
-{
-	lhs.x += rhs.x;
-	lhs.y += rhs.y;
-	lhs.z += rhs.z;
-	return lhs;
-}
-
-StdMeshVector operator+(const StdMeshVector& lhs, const StdMeshVector& rhs)
-{
-	StdMeshVector v(lhs);
-	v += rhs;
-	return v;
-}
-
-StdMeshVector operator*(const StdMeshVector& lhs, const StdMeshVector& rhs)
-{
-	StdMeshVector v;
-	v.x = lhs.x * rhs.x;
-	v.y = lhs.y * rhs.y;
-	v.z = lhs.z * rhs.z;
-	return v;
-}
-
-StdMeshVector& operator*=(StdMeshVector& lhs, float rhs)
-{
-	lhs.x *= rhs;
-	lhs.y *= rhs;
-	lhs.z *= rhs;
-	return lhs;
-}
-
-StdMeshVector operator*(const StdMeshVector& lhs, float rhs)
-{
-	StdMeshVector v(lhs);
-	v *= rhs;
-	return v;
-}
-
-StdMeshVector operator*(float lhs, const StdMeshVector& rhs)
-{
-	return rhs * lhs;
-}
-
-StdMeshVector operator/(const StdMeshVector& lhs, const StdMeshVector& rhs)
-{
-	StdMeshVector v;
-	v.x = lhs.x/rhs.x;
-	v.y = lhs.y/rhs.y;
-	v.z = lhs.z/rhs.z;
-	return v;
-}
-
-StdMeshVector operator/(float lhs, const StdMeshVector& rhs)
-{
-	StdMeshVector v;
-	v.x = lhs/rhs.x;
-	v.y = lhs/rhs.y;
-	v.z = lhs/rhs.z;
-	return v;
-}
-
-StdMeshVector operator/(const StdMeshVector& lhs, float rhs)
-{
-	StdMeshVector v;
-	v.x = lhs.x/rhs;
-	v.y = lhs.y/rhs;
-	v.z = lhs.z/rhs;
-	return v;
-}
-
 StdMeshVector operator*(const StdMeshMatrix& lhs, const StdMeshVector& rhs) // does not apply translation part
 {
-	StdMeshVector v;
-	v.x = lhs(0,0)*rhs.x + lhs(0,1)*rhs.y + lhs(0,2)*rhs.z;
-	v.y = lhs(1,0)*rhs.x + lhs(1,1)*rhs.y + lhs(1,2)*rhs.z;
-	v.z = lhs(2,0)*rhs.x + lhs(2,1)*rhs.y + lhs(2,2)*rhs.z;
+	StdMeshVector v {
+		lhs(0,0)*rhs.x() + lhs(0,1)*rhs.y() + lhs(0,2)*rhs.z(),
+		lhs(1,0)*rhs.x() + lhs(1,1)*rhs.y() + lhs(1,2)*rhs.z(),
+		lhs(2,0)*rhs.x() + lhs(2,1)*rhs.y() + lhs(2,2)*rhs.z()
+		};
 	return v;
 }
 

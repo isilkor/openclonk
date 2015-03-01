@@ -229,18 +229,32 @@ namespace
 
 		void CompileFunc(StdCompiler* pComp)
 		{
+			float tx, ty, tz;
+			float sx, sy, sz;
+			if (pComp->isDecompiler())
+			{
+				Trans.translate.extract(&tx, &ty, &tz);
+				Trans.scale.extract(&sx, &sy, &sz);
+			}
+
 			pComp->Separator(StdCompiler::SEP_START);
-			CompileFloat(pComp, Trans.translate.x);
-			CompileFloat(pComp, Trans.translate.y);
-			CompileFloat(pComp, Trans.translate.z);
+			CompileFloat(pComp, tx);
+			CompileFloat(pComp, ty);
+			CompileFloat(pComp, tz);
 			CompileFloat(pComp, Trans.rotate.w);
 			CompileFloat(pComp, Trans.rotate.x);
 			CompileFloat(pComp, Trans.rotate.y);
 			CompileFloat(pComp, Trans.rotate.z);
-			CompileFloat(pComp, Trans.scale.x);
-			CompileFloat(pComp, Trans.scale.y);
-			CompileFloat(pComp, Trans.scale.z);
+			CompileFloat(pComp, sx);
+			CompileFloat(pComp, sy);
+			CompileFloat(pComp, sz);
 			pComp->Separator(StdCompiler::SEP_END);
+
+			if (pComp->isCompiler())
+			{
+				Trans.translate.set(tx, ty, tz);
+				Trans.scale.set(sx, sy, sz);
+			}
 		}
 
 		ALLOW_TEMP_TO_REF(TransformAdapt);
@@ -269,7 +283,7 @@ namespace
 		frame.Transformation.rotate.z = -frame.Transformation.rotate.z;
 
 		StdMeshVector d = old_bone_transformation.scale * (old_bone_transformation.rotate * frame.Transformation.translate);
-		d.x = -d.x;
+		d.setX(-d.x());
 		frame.Transformation.translate = new_inverse_bone_transformation.rotate * (new_inverse_bone_transformation.scale * d);
 
 		// TODO: scale

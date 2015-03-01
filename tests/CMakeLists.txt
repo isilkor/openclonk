@@ -93,6 +93,13 @@ endfunction()
 if (GTEST_FOUND AND GMOCK_FOUND)
     enable_testing()
 
+    create_test(StdMeshMath
+        SOURCES
+        "../src/lib/StdMeshMath.cpp"
+        "../src/lib/StdMeshMath.h"
+        "math/StdMeshVectorTest.cpp"
+        )
+
     AUX_SOURCE_DIRECTORY("${CMAKE_CURRENT_LIST_DIR}" TESTS_SOURCES)
     add_executable(tests ${TESTS_SOURCES} ${C4SCRIPT_SOURCES})
     target_link_libraries(tests gtest libc4script libmisc)

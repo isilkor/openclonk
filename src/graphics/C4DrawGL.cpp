@@ -316,6 +316,7 @@ CStdGLCtx *CStdGL::CreateContext(C4Window * pWindow, C4AbstractApp *pApp)
 		const char *gl_renderer = reinterpret_cast<const char *>(glGetString(GL_RENDERER));
 		const char *gl_version = reinterpret_cast<const char *>(glGetString(GL_VERSION));
 		LogF("GL %s on %s (%s)", gl_version ? gl_version : "", gl_renderer ? gl_renderer : "", gl_vendor ? gl_vendor : "");
+		
 		if (Config.Graphics.DebugOpenGL)
 		{
 			// Dump extension list
@@ -909,6 +910,7 @@ void CStdGL::Default()
 	iPixelFormat=0;
 	sfcFmt=0;
 	Workarounds.LowMaxVertexUniformCount = false;
+	Workarounds.ForceSoftwareTransform = false;
 }
 
 unsigned int CStdGL::GenVAOID()

@@ -25,6 +25,7 @@
 #include "script/C4AulParse.h"
 #include "script/C4AulScriptFunc.h"
 #include "object/C4Def.h"
+#include "script/C4AulScriptFunc.h"
 #include "script/C4Effect.h"
 
 /*--- C4ScriptHost ---*/
@@ -103,7 +104,7 @@ void C4ScriptHost::UnlinkOwnedFunctions()
 				// Unlink the removed function from the inheritance chain
 				if (func_chain->OwnerOverloaded == func)
 				{
-					func_chain->OwnerOverloaded = func->OwnerOverloaded;
+					func_chain->SetOverloaded(func->OwnerOverloaded);
 					break;
 				}
 				assert(func_chain->OwnerOverloaded && "Removed function not found in inheritance chain");
@@ -233,8 +234,14 @@ C4ExtraScriptHost::C4ExtraScriptHost(C4String *parent_key_name):
 {
 }
 
+C4ExtraScriptHost::~C4ExtraScriptHost()
+{
+	Clear();
+}
+
 void C4ExtraScriptHost::Clear()
 {
+	C4ScriptHost::Clear();
 	ParserPropList._getPropList()->Clear();
 }
 

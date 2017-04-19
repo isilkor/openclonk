@@ -234,6 +234,7 @@ endif()
 find_package(JPEG REQUIRED)
 find_package(PNG REQUIRED)
 find_package(ZLIB REQUIRED)
+find_package(MPFR REQUIRED)
 include_directories(
 	${JPEG_INCLUDE_DIR}
 	${PNG_INCLUDE_DIR}
@@ -1074,7 +1075,7 @@ src/script/C4ValueMap.cpp
 src/script/C4ValueMap.h
 )
 
-target_link_libraries(libc4script libmisc)
+target_link_libraries(libc4script libmisc mpfr)
 
 add_library(libopenclonk
 	src/c4group/C4Extra.cpp

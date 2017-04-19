@@ -1075,6 +1075,18 @@ static bool FnFileWrite(C4PropList * _this, int32_t file_handle, C4String *data)
 	return true;
 }
 
+static C4Value FnParseFloat(C4PropList *_this, C4String *data)
+{
+	C4Value v;
+	MPFR_DECL_INIT(flt, C4Value::default_mpfr_precision);
+	if (!data)
+		return C4VNull;
+	else
+		mpfr_strtofr(flt, data->GetCStr(), nullptr, 10, MPFR_RNDN);
+	v.SetFloat(flt);
+	return v;
+}
+
 //=========================== C4Script Function Map ===================================
 
 C4ScriptConstDef C4ScriptConstMap[]=
@@ -1211,6 +1223,8 @@ void InitCoreFunctionMap(C4AulScriptEngine *pEngine)
 	F(StringToIdentifier);
 	F(GetConstantNameByValue);
 	F(ReplaceString);
+
+	F(ParseFloat);
 
 	::AddFunc(p, "Translate", C4AulExec::FnTranslate);
 	::AddFunc(p, "LogCallStack", C4AulExec::FnLogCallStack);

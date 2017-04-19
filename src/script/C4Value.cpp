@@ -41,6 +41,8 @@ const char* GetC4VName(const C4V_Type Type)
 		return "int";
 	case C4V_Bool:
 		return "bool";
+	case C4V_Float:
+		return "float";
 	case C4V_String:
 		return "string";
 	case C4V_Array:
@@ -49,6 +51,8 @@ const char* GetC4VName(const C4V_Type Type)
 		return "proplist";
 	case C4V_Any:
 		return "any";
+	case C4V_AnyNumber:
+		return "number";
 	case C4V_Object:
 		return "object";
 	case C4V_Def:
@@ -57,9 +61,9 @@ const char* GetC4VName(const C4V_Type Type)
 		return "effect";
 	case C4V_Function:
 		return "function";
-	default:
-		return "!Fehler!";
 	}
+	assert(!"unexpected type in GetC4VName");
+	return "???";
 }
 
 C4Value::C4Value(C4PropListStatic * p): C4Value(static_cast<C4PropList *>(p)) {}
@@ -137,6 +141,15 @@ StdStrBuf C4Value::GetDataString(int depth, const C4PropListStatic *ignore_refer
 	{
 	case C4V_Int:
 		return FormatString("%ld", static_cast<long>(Data.Int));
+	case C4V_Float:
+	{
+		char *repr;
+		mpfr_asprintf(&repr, "%1.8Rg", Data.Float);
+		StdStrBuf buf;
+		buf.Copy(repr);
+		mpfr_free_str(repr);
+		return buf;
+	}
 	case C4V_Bool:
 		return StdStrBuf(getBool() ? "true" : "false");
 	case C4V_PropList:
@@ -314,6 +327,8 @@ void C4Value::CompileFunc(StdCompiler *pComp, C4ValueNumbers * numbers)
 			cC4VID = 'i'; break;
 		case C4V_Bool:
 			cC4VID = 'b'; break;
+		case C4V_Float:
+			cC4VID = 'f'; break;
 		case C4V_PropList:
 			if (getPropList()->IsStatic())
 				cC4VID = 'D';
@@ -348,6 +363,26 @@ void C4Value::CompileFunc(StdCompiler *pComp, C4ValueNumbers * numbers)
 		pComp->Value(iTmp);
 		SetBool(!!iTmp);
 		break;
+
+	case 'f':
+	{
+		StdStrBuf s;
+		if (!deserializing)
+		{
+			char *repr;
+			mpfr_asprintf(&repr, "%Re", Data.Float);
+			s.Copy(repr);
+			mpfr_free_str(repr);
+		}
+		pComp->Value(s);
+		if (deserializing)
+		{
+			mpfr_init2(Data.Float, default_mpfr_precision);
+			mpfr_strtofr(Data.Float, s.getData(), nullptr, 10, MPFR_RNDN);
+			Type = C4V_Float;
+		}
+		break;
+	}
 
 	case 'E':
 		if (!deserializing)

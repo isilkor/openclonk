@@ -146,6 +146,41 @@ void C4AulExec::ClearPointers(C4Object * obj)
 	}
 }
 
+static void PerformNumericPromotions(C4Value *a, C4Value *b, const char *op)
+{
+	if (a->GetType() == b->GetType())
+		// nothing to do for same types
+		return;
+
+	if (a->CheckConversion(C4V_Int) && b->CheckConversion(C4V_Int))
+	{
+		// Promote both parameters into int (from int, bool or nil)
+		a->SetInt(a->_getInt());
+		b->SetInt(b->_getInt());
+		return;
+	}
+
+	if (a->GetType() == C4V_Float)
+	{
+		assert(b->CheckConversion(C4V_Int));
+		MPFR_DECL_INIT(flt, C4Value::default_mpfr_precision);
+		mpfr_set_si(flt, b->_getInt(), MPFR_RNDN);
+		b->SetFloat(flt);
+	}
+	else if (b->GetType() == C4V_Float)
+	{
+		assert(a->CheckConversion(C4V_Int));
+		MPFR_DECL_INIT(flt, C4Value::default_mpfr_precision);
+		mpfr_set_si(flt, a->_getInt(), MPFR_RNDN);
+		a->SetFloat(flt);
+	}
+	else
+	{
+		assert(!"Unexpected value type in numeric promotion");
+		throw C4AulExecError(FormatString("internal error: unexpected type in numeric promotion: %s %s %s", a->GetTypeName(), op, b->GetTypeName()).getData());
+	}
+}
+
 C4Value C4AulExec::Exec(C4AulScriptFunc *pSFunc, C4PropList * p, C4Value *pnPars, bool fPassErrors)
 {
 	// Save start context
@@ -306,74 +341,142 @@ C4Value C4AulExec::Exec(C4AulBCC *pCPos)
 				pCurVal->SetBool(!pCurVal->getBool());
 				break;
 			case AB_Neg:  // -
-				CheckOpPar(C4V_Int, "-");
-				pCurVal->SetInt(-pCurVal->_getInt());
+				CheckOpPar(C4V_AnyNumber, "-");
+				if (pCurVal->CheckConversion(C4V_Int))
+					pCurVal->SetInt(-pCurVal->_getInt());
+				else if (pCurVal->GetType() == C4V_Float)
+					mpfr_neg(pCurVal->_getFloat(), pCurVal->_getFloat(), MPFR_RNDN);
+				else
+					throw C4AulExecError("internal error: unexpected number type in unary '-'");
 				break;
 			case AB_Inc: // ++
-				CheckOpPar(C4V_Int, "++");
-				pCurVal->SetInt(pCurVal->_getInt() + 1);
+				CheckOpPar(C4V_AnyNumber, "++");
+				if (pCurVal->CheckConversion(C4V_Int))
+					pCurVal->SetInt(pCurVal->_getInt() + 1);
+				else if (pCurVal->GetType() == C4V_Float)
+					mpfr_add_si(pCurVal->_getFloat(), pCurVal->_getFloat(), 1, MPFR_RNDN);
+				else
+					throw C4AulExecError("internal error: unexpected number type in '++'");
 				break;
 			case AB_Dec: // --
-				CheckOpPar(C4V_Int, "--");
-				pCurVal->SetInt(pCurVal->_getInt() - 1);
+				CheckOpPar(C4V_AnyNumber, "--");
+				if (pCurVal->CheckConversion(C4V_Int))
+					pCurVal->SetInt(pCurVal->_getInt() - 1);
+				else if (pCurVal->GetType() == C4V_Float)
+					mpfr_sub_si(pCurVal->_getFloat(), pCurVal->_getFloat(), 1, MPFR_RNDN);
+				else
+					throw C4AulExecError("internal error: unexpected number type in '--'");
 				break;
 			// postfix
 			case AB_Pow:  // **
 			{
-				CheckOpPars(C4V_Int, C4V_Int, "**");
+				CheckOpPars(C4V_AnyNumber, C4V_AnyNumber, "**");
 				C4Value *pPar1 = pCurVal - 1, *pPar2 = pCurVal;
-				pPar1->SetInt(Pow(pPar1->_getInt(), pPar2->_getInt()));
+				PerformNumericPromotions(pPar1, pPar2, "**");
+				if (pPar1->GetType() == C4V_Float)
+				{
+					mpfr_pow(pPar1->_getFloat(), pPar1->_getFloat(), pPar2->_getFloat(), MPFR_RNDN);
+				}
+				else
+				{
+					pPar1->SetInt(Pow(pPar1->_getInt(), pPar2->_getInt()));
+				}
 				PopValue();
 				break;
 			}
 			case AB_Div:  // /
 			{
-				CheckOpPars(C4V_Int, C4V_Int, "/");
+				CheckOpPars(C4V_AnyNumber, C4V_AnyNumber, "/");
 				C4Value *pPar1 = pCurVal - 1, *pPar2 = pCurVal;
-				if (!pPar2->_getInt())
-					throw C4AulExecError("division by zero");
-				// INT_MIN/-1 cannot be represented in an int and would cause an uncaught exception
-				if (pPar1->_getInt()==INT32_MIN && pPar2->_getInt()==-1)
-					throw C4AulExecError("division overflow");
-				pPar1->SetInt(pPar1->_getInt() / pPar2->_getInt());
+				PerformNumericPromotions(pPar1, pPar2, "/");
+				if (pPar1->GetType() == C4V_Float)
+				{
+					assert(pPar2->GetType() == C4V_Float);
+					mpfr_div(pPar1->_getFloat(), pPar1->_getFloat(), pPar2->_getFloat(), MPFR_RNDN);
+				}
+				else
+				{
+					if (!pPar2->_getInt())
+						throw C4AulExecError("division by zero");
+					// INT_MIN/-1 cannot be represented in an int and would cause an uncaught exception
+					if (pPar1->_getInt() == INT32_MIN && pPar2->_getInt() == -1)
+						throw C4AulExecError("division overflow");
+					pPar1->SetInt(pPar1->_getInt() / pPar2->_getInt());
+				}
 				PopValue();
 				break;
 			}
 			case AB_Mul:  // *
 			{
-				CheckOpPars(C4V_Int, C4V_Int, "*");
+				CheckOpPars(C4V_AnyNumber, C4V_AnyNumber, "*");
 				C4Value *pPar1 = pCurVal - 1, *pPar2 = pCurVal;
-				pPar1->SetInt(pPar1->_getInt() * pPar2->_getInt());
+				PerformNumericPromotions(pPar1, pPar2, "*");
+				if (pPar1->GetType() == C4V_Float)
+				{
+					assert(pPar2->GetType() == C4V_Float);
+					mpfr_mul(pPar1->_getFloat(), pPar1->_getFloat(), pPar2->_getFloat(), MPFR_RNDN);
+				}
+				else
+				{
+					pPar1->SetInt(pPar1->_getInt() * pPar2->_getInt());
+				}
 				PopValue();
 				break;
 			}
 			case AB_Mod:  // %
 			{
-				CheckOpPars(C4V_Int, C4V_Int, "%");
+				CheckOpPars(C4V_AnyNumber, C4V_AnyNumber, "%");
 				C4Value *pPar1 = pCurVal - 1, *pPar2 = pCurVal;
-				// INT_MIN%-1 cannot be represented in an int and would cause an uncaught exception
-				if (pPar1->_getInt()==INT32_MIN && pPar2->_getInt()==-1)
-					throw C4AulExecError("modulo division overflow");
-				if (pPar2->_getInt())
-					pPar1->SetInt(pPar1->_getInt() % pPar2->_getInt());
+				PerformNumericPromotions(pPar1, pPar2, "%");
+				if (pPar1->GetType() == C4V_Float)
+				{
+					assert(pPar2->GetType() == C4V_Float);
+					mpfr_fmod(pPar1->_getFloat(), pPar1->_getFloat(), pPar2->_getFloat(), MPFR_RNDN);
+				}
 				else
-					pPar1->Set0();
+				{
+					// INT_MIN%-1 cannot be represented in an int and would cause an uncaught exception
+					if (pPar1->_getInt() == INT32_MIN && pPar2->_getInt() == -1)
+						throw C4AulExecError("modulo division overflow");
+					if (pPar2->_getInt())
+						pPar1->SetInt(pPar1->_getInt() % pPar2->_getInt());
+					else
+						pPar1->Set0();
+				}
 				PopValue();
 				break;
 			}
 			case AB_Sub:  // -
 			{
-				CheckOpPars(C4V_Int, C4V_Int, "-");
+				CheckOpPars(C4V_AnyNumber, C4V_AnyNumber, "-");
 				C4Value *pPar1 = pCurVal - 1, *pPar2 = pCurVal;
-				pPar1->SetInt(pPar1->_getInt() - pPar2->_getInt());
+				PerformNumericPromotions(pPar1, pPar2, "-");
+				if (pPar1->GetType() == C4V_Float)
+				{
+					assert(pPar2->GetType() == C4V_Float);
+					mpfr_sub(pPar1->_getFloat(), pPar1->_getFloat(), pPar2->_getFloat(), MPFR_RNDN);
+				}
+				else
+				{
+					pPar1->SetInt(pPar1->_getInt() - pPar2->_getInt());
+				}
 				PopValue();
 				break;
 			}
 			case AB_Sum:  // +
 			{
-				CheckOpPars(C4V_Int, C4V_Int, "+");
+				CheckOpPars(C4V_AnyNumber, C4V_AnyNumber, "+");
 				C4Value *pPar1 = pCurVal - 1, *pPar2 = pCurVal;
-				pPar1->SetInt(pPar1->_getInt() + pPar2->_getInt());
+				PerformNumericPromotions(pPar1, pPar2, "+");
+				if (pPar1->GetType() == C4V_Float)
+				{
+					assert(pPar2->GetType() == C4V_Float);
+					mpfr_add(pPar1->_getFloat(), pPar1->_getFloat(), pPar2->_getFloat(), MPFR_RNDN);
+				}
+				else
+				{
+					pPar1->SetInt(pPar1->_getInt() + pPar2->_getInt());
+				}
 				PopValue();
 				break;
 			}
@@ -395,33 +498,69 @@ C4Value C4AulExec::Exec(C4AulBCC *pCPos)
 			}
 			case AB_LessThan: // <
 			{
-				CheckOpPars(C4V_Int, C4V_Int, "<");
+				CheckOpPars(C4V_AnyNumber, C4V_AnyNumber, "<");
 				C4Value *pPar1 = pCurVal - 1, *pPar2 = pCurVal;
-				pPar1->SetBool(pPar1->_getInt() < pPar2->_getInt());
+				PerformNumericPromotions(pPar1, pPar2, "<");
+				if (pPar1->GetType() == C4V_Float)
+				{
+					assert(pPar2->GetType() == C4V_Float);
+					pPar1->SetBool(mpfr_less_p(pPar1->_getFloat(), pPar2->_getFloat()) != 0);
+				}
+				else
+				{
+					pPar1->SetBool(pPar1->_getInt() < pPar2->_getInt());
+				}
 				PopValue();
 				break;
 			}
 			case AB_LessThanEqual:  // <=
 			{
-				CheckOpPars(C4V_Int, C4V_Int, "<=");
+				CheckOpPars(C4V_AnyNumber, C4V_AnyNumber, "<=");
 				C4Value *pPar1 = pCurVal - 1, *pPar2 = pCurVal;
-				pPar1->SetBool(pPar1->_getInt() <= pPar2->_getInt());
+				PerformNumericPromotions(pPar1, pPar2, "<=");
+				if (pPar1->GetType() == C4V_Float)
+				{
+					assert(pPar2->GetType() == C4V_Float);
+					pPar1->SetBool(mpfr_lessequal_p(pPar1->_getFloat(), pPar2->_getFloat()) != 0);
+				}
+				else
+				{
+					pPar1->SetBool(pPar1->_getInt() <= pPar2->_getInt());
+				}
 				PopValue();
 				break;
 			}
 			case AB_GreaterThan:  // >
 			{
-				CheckOpPars(C4V_Int, C4V_Int, ">");
+				CheckOpPars(C4V_AnyNumber, C4V_AnyNumber, ">");
 				C4Value *pPar1 = pCurVal - 1, *pPar2 = pCurVal;
-				pPar1->SetBool(pPar1->_getInt() > pPar2->_getInt());
+				PerformNumericPromotions(pPar1, pPar2, ">");
+				if (pPar1->GetType() == C4V_Float)
+				{
+					assert(pPar2->GetType() == C4V_Float);
+					pPar1->SetBool(mpfr_greater_p(pPar1->_getFloat(), pPar2->_getFloat()) != 0);
+				}
+				else
+				{
+					pPar1->SetBool(pPar1->_getInt() > pPar2->_getInt());
+				}
 				PopValue();
 				break;
 			}
 			case AB_GreaterThanEqual: // >=
 			{
-				CheckOpPars(C4V_Int, C4V_Int, ">=");
+				CheckOpPars(C4V_AnyNumber, C4V_AnyNumber, ">=");
 				C4Value *pPar1 = pCurVal - 1, *pPar2 = pCurVal;
-				pPar1->SetBool(pPar1->_getInt() >= pPar2->_getInt());
+				PerformNumericPromotions(pPar1, pPar2, "<");
+				if (pPar1->GetType() == C4V_Float)
+				{
+					assert(pPar2->GetType() == C4V_Float);
+					pPar1->SetBool(mpfr_greaterequal_p(pPar1->_getFloat(), pPar2->_getFloat()) != 0);
+				}
+				else
+				{
+					pPar1->SetBool(pPar1->_getInt() >= pPar2->_getInt());
+				}
 				PopValue();
 				break;
 			}

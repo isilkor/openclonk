@@ -16,25 +16,36 @@
 #ifndef INC_C4Value
 #define INC_C4Value
 
+#ifdef _MSC_VER
+#pragma warning (push)
+#pragma warning (disable: 4146)
+#endif
+#include <mpfr.h>
+#ifdef _MSC_VER
+#pragma warning (pop)
+#endif
+
 #include "script/C4StringTable.h"
 #include "object/C4ObjectPtr.h"
 
 // C4Value type
 enum C4V_Type
 {
-	C4V_Nil=0,
-	C4V_Int=1,
-	C4V_Bool=2,
-	C4V_PropList=3,
-	C4V_String=4,
-	C4V_Array=5,
-	C4V_Function=6,
+	C4V_Nil,
+	C4V_Int,
+	C4V_Bool,
+	C4V_Float,
+	C4V_PropList,
+	C4V_String,
+	C4V_Array,
+	C4V_Function,
 
-	C4V_Enum=8, // enumerated array or proplist
-	C4V_C4ObjectEnum=9, // enumerated object
+	C4V_Enum, // enumerated array or proplist
+	C4V_C4ObjectEnum, // enumerated object
 
 	// for typechecks
 	C4V_Any,
+	C4V_AnyNumber,
 	C4V_Object,
 	C4V_Def,
 	C4V_Effect,
@@ -54,8 +65,9 @@ union C4V_Data
 	C4String * Str;
 	C4ValueArray * Array;
 	C4AulFunc * Fn;
+	mpfr_t Float;
 
-	void *getPointerByType(C4V_Type Type) const
+	void *getPointerByType(C4V_Type Type)
 	{
 		switch (Type)
 		{
@@ -67,10 +79,13 @@ union C4V_Data
 			return Array;
 		case C4V_Function:
 			return Fn;
+		case C4V_Float:
+			return Float;
 		}
 		assert(Int == 0);
 		return nullptr;
 	}
+	const void *getPointerByType(C4V_Type Type) const { return const_cast<C4V_Data*>(this)->getPointerByType(Type); }
 };
 
 class C4JSONSerializationError : public std::exception
@@ -84,6 +99,7 @@ public:
 class C4Value
 {
 public:
+	static constexpr int default_mpfr_precision = 23;
 
 	C4Value() : NextRef(nullptr), Type(C4V_Nil) { Data.Int = 0; }
 
@@ -97,6 +113,10 @@ public:
 	{ Data.Int = data; }
 	explicit C4Value(long data): NextRef(nullptr), Type(C4V_Int)
 	{ Data.Int = int32_t(data); }
+	explicit C4Value(const mpfr_t &data) : NextRef(nullptr), Type(C4V_Float)
+	{
+		mpfr_init_set(Data.Float, data, MPFR_RNDN);
+	}
 	explicit C4Value(C4PropListStatic *p);
 	explicit C4Value(C4Def *p);
 	explicit C4Value(C4Object *pObj);
@@ -117,11 +137,26 @@ public:
 	template<typename T> C4Value(Nillable<T> v): C4Value(v.IsNil() ? C4Value() : C4Value(v.operator T())) {}
 
 	C4Value& operator = (const C4Value& nValue) { Set(nValue); return *this; }
+	C4Value &operator= (C4Value &&nValue) noexcept;
 
 	~C4Value() { DelDataRef(Data, Type, NextRef); }
 
 	// Checked getters
-	int32_t getInt() const { return CheckConversion(C4V_Int) ? Data.Int : 0; }
+	int32_t getInt() const {
+		switch (Type)
+		{
+		case C4V_Int:
+		case C4V_Bool:
+			return Data.Int;
+		case C4V_Float:
+			return mpfr_get_si(Data.Float, MPFR_RNDN);
+		case C4V_Nil:
+			assert(Data.Int == 0);
+			// fallthrough
+		default:
+			return 0;
+		}
+	}
 	bool getBool() const
 	{
 		switch (Type)
@@ -131,6 +166,8 @@ public:
 		case C4V_Int:
 		case C4V_Bool:
 			return Data.Int != 0;
+		case C4V_Float:
+			return mpfr_zero_p(Data.Float) == 0;
 		case C4V_Array:
 		case C4V_String:
 		case C4V_PropList:
@@ -149,14 +186,14 @@ public:
 	C4String * getStr() const { return CheckConversion(C4V_String) ? Data.Str : nullptr; }
 	C4ValueArray * getArray() const { return CheckConversion(C4V_Array) ? Data.Array : nullptr; }
 	C4AulFunc * getFunction() const { return CheckConversion(C4V_Function) ? Data.Fn : nullptr; }
-	void *getPointer() const
-	{
-		return Data.getPointerByType(Type);
-	}
+	const void *getPointer() const { return Data.getPointerByType(Type); }
+	void *getPointer() { return Data.getPointerByType(Type); }
 
 	// Unchecked getters
 	int32_t _getInt() const { return Data.Int; }
 	bool _getBool() const { return !! Data.Int; }
+	const mpfr_t &_getFloat() const { return Data.Float; }
+	mpfr_t &_getFloat() { return Data.Float; }
 	C4Object *_getObj() const;
 	C4Def *_getDef() const;
 	C4String *_getStr() const { return Data.Str; }
@@ -170,6 +207,12 @@ public:
 	void Set(const C4Value &nValue) { Set(nValue.Data, nValue.Type); }
 
 	void SetInt(int32_t i) { C4V_Data d; d.Int = i; Set(d, C4V_Int); }
+	void SetFloat(const mpfr_t &f)
+	{
+		C4V_Data d;
+		mpfr_init_set(d.Float, f, MPFR_RNDN);
+		Set(d, C4V_Float);
+	}
 	void SetBool(bool b) { C4V_Data d; d.Int = b; Set(d, C4V_Bool); }
 	void SetString(C4String * Str) { C4V_Data d; d.Str = Str; Set(d, C4V_String); }
 	void SetArray(C4ValueArray * Array) { C4V_Data d; d.Array = Array; Set(d, C4V_Array); }
@@ -195,6 +238,8 @@ public:
 		case C4V_Bool:
 		case C4V_C4ObjectEnum:
 			return _getInt() == cmp._getInt();
+		case C4V_Float:
+			return mpfr_equal_p(Data.Float, cmp.Data.Float) != 0;
 		case C4V_Array:
 		case C4V_String:
 		case C4V_PropList:
@@ -208,11 +253,18 @@ public:
 
 	// Change and set Type to int in case it was nil or bool before
 	// Use with care: These don't handle int32_t overflow
-	C4Value & operator += (int32_t by) { Data.Int += by; Type=C4V_Int; return *this; }
-	C4Value & operator ++ ()           { Data.Int++;     Type=C4V_Int; return *this; }
-	C4Value operator ++ (int)          { C4Value old = *this; ++(*this); return old; }
-	C4Value & operator -- ()           { Data.Int--;     Type=C4V_Int; return *this; }
-	C4Value operator -- (int)          { C4Value old = *this; --(*this); return old; }
+#ifdef _MSC_VER
+#pragma warning (push)
+#pragma warning (disable: 4996)
+#endif
+	DEPRECATED C4Value & operator += (int32_t by) { Data.Int += by; Type=C4V_Int; return *this; }
+	DEPRECATED C4Value & operator ++ ()           { Data.Int++;     Type=C4V_Int; return *this; }
+	DEPRECATED C4Value operator ++ (int)          { C4Value old = *this; ++(*this); return old; }
+	DEPRECATED C4Value & operator -- ()           { Data.Int--;     Type=C4V_Int; return *this; }
+	DEPRECATED C4Value operator -- (int)          { C4Value old = *this; --(*this); return old; }
+#ifdef _MSC_VER
+#pragma warning (pop)
+#endif
 
 	// getters
 	C4V_Data GetData()    const { return Data; }
@@ -233,11 +285,14 @@ public:
 		case C4V_Nil:      return Type == C4V_Nil || (Type == C4V_Int && !*this);
 		case C4V_Int:      return Type == C4V_Int || Type == C4V_Nil || Type == C4V_Bool;
 		case C4V_Bool:     return true;
+		case C4V_Float:    return Type == C4V_Float || Type == C4V_Nil;
 		case C4V_PropList: return Type == C4V_PropList || Type == C4V_Nil || (Type == C4V_Int && !*this);
 		case C4V_String:   return Type == C4V_String || Type == C4V_Nil || (Type == C4V_Int && !*this);
 		case C4V_Array:    return Type == C4V_Array || Type == C4V_Nil || (Type == C4V_Int && !*this);
 		case C4V_Function: return Type == C4V_Function || Type == C4V_Nil || (Type == C4V_Int && !*this);
 		case C4V_Any:      return true;
+		case C4V_AnyNumber:
+			return CheckParConversion(C4V_Float) || CheckParConversion(C4V_Int);
 		case C4V_Object:   return (Type == C4V_PropList && FnCnvObject()) || Type == C4V_Nil || (Type == C4V_Int && !*this);
 		case C4V_Def:      return (Type == C4V_PropList && FnCnvDef()) || Type == C4V_Nil || (Type == C4V_Int && !*this);
 		case C4V_Effect:   return (Type == C4V_PropList && FnCnvEffect()) || Type == C4V_Nil || (Type == C4V_Int && !*this);
@@ -249,13 +304,16 @@ public:
 		switch (vtToType)
 		{
 		case C4V_Nil:      return Type == C4V_Nil;
-		case C4V_Int:      return Type == C4V_Nil || Type == C4V_Int || Type == C4V_Bool;
+		case C4V_Int:      return Type == C4V_Int || Type == C4V_Nil || Type == C4V_Bool;
 		case C4V_Bool:     return true;
+		case C4V_Float:    return Type == C4V_Float || Type == C4V_Nil;
 		case C4V_PropList: return Type == C4V_PropList;
 		case C4V_String:   return Type == C4V_String;
 		case C4V_Array:    return Type == C4V_Array;
 		case C4V_Function: return Type == C4V_Function;
 		case C4V_Any:      return true;
+		case C4V_AnyNumber:
+			return CheckConversion(C4V_Float) || CheckConversion(C4V_Int);
 		case C4V_Object:   return Type == C4V_PropList && FnCnvObject();
 		case C4V_Def:      return Type == C4V_PropList && FnCnvDef();
 		case C4V_Effect:   return Type == C4V_PropList && FnCnvEffect();
@@ -359,6 +417,11 @@ ALWAYS_INLINE void C4Value::AddDataRef()
 	case C4V_String: Data.Str->IncRef(); break;
 	case C4V_Array: Data.Array->IncRef(); break;
 	case C4V_Function: Data.Fn->IncRef(); break;
+	case C4V_Float:
+	{
+		mpfr_t d = {Data.Float[0]};
+		mpfr_init_set(Data.Float, d, MPFR_RNDN);
+	}
 	default: break;
 	}
 }
@@ -374,6 +437,7 @@ ALWAYS_INLINE void C4Value::DelDataRef(C4V_Data Data, C4V_Type Type, C4Value *pN
 	case C4V_String: Data.Str->DecRef(); break;
 	case C4V_Array: Data.Array->DecRef(); break;
 	case C4V_Function: Data.Fn->DecRef(); break;
+	case C4V_Float: mpfr_clear(Data.Float); break;
 	default: break;
 	}
 }
@@ -424,6 +488,22 @@ ALWAYS_INLINE C4Value::C4Value(C4Value && nValue) noexcept:
 		Data.PropList->DelRef(&nValue, nValue.NextRef);
 	}
 	nValue.Type = C4V_Nil; nValue.Data.Int = 0; nValue.NextRef = nullptr;
+}
+
+inline C4Value &C4Value::operator=(C4Value &&nValue) noexcept
+{
+	if (&nValue == this) return *this;
+
+	DelDataRef(Data, Type, NextRef);
+	Data = nValue.Data;
+	Type = nValue.Type;
+	if (Type == C4V_PropList)
+	{
+		Data.PropList->AddRef(this);
+		Data.PropList->DelRef(&nValue, nValue.NextRef);
+	}
+	nValue.Type = C4V_Nil; nValue.Data.Int = 0; nValue.NextRef = nullptr;
+	return *this;
 }
 
 #endif

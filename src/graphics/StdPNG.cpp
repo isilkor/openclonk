@@ -248,6 +248,18 @@ bool CPNGFile::Save(const char *szFilename)
 	// error handling
 	if (setjmp(png_jmpbuf(png_ptr))) { Clear(); return false; }
 	// io initialization
+	png_set_write_fn(png_ptr, fp,
+		[](png_structp png_ptr, png_bytep data, png_size_t length)
+		{
+			size_t rv = fwrite(data, 1, length, static_cast<FILE*>(png_get_io_ptr(png_ptr)));
+			if (rv != length)
+				png_error(png_ptr, "Write error");
+		},
+		[](png_structp png_ptr)
+		{
+			fflush(static_cast<FILE*>(png_get_io_ptr(png_ptr)));
+		}
+	);
 	png_init_io(png_ptr, fp);
 	// compression stuff
 	png_set_filter(png_ptr, 0, PNG_FILTER_NONE | PNG_FILTER_SUB | PNG_FILTER_PAETH);

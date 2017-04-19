@@ -50,15 +50,27 @@ template<typename T> class Nillable;
 union C4V_Data
 {
 	intptr_t Int;
-	void * Ptr;
 	C4PropList * PropList;
 	C4String * Str;
 	C4ValueArray * Array;
 	C4AulFunc * Fn;
-	// cheat a little - assume that all members have the same length
-	operator void * () { return Ptr; }
-	operator const void * () const { return Ptr; }
-	C4V_Data &operator = (void *p) { assert(!p); Ptr = p; return *this; }
+
+	void *getPointerByType(C4V_Type Type) const
+	{
+		switch (Type)
+		{
+		case C4V_PropList:
+			return PropList;
+		case C4V_String:
+			return Str;
+		case C4V_Array:
+			return Array;
+		case C4V_Function:
+			return Fn;
+		}
+		assert(Int == 0);
+		return nullptr;
+	}
 };
 
 class C4JSONSerializationError : public std::exception
@@ -73,7 +85,7 @@ class C4Value
 {
 public:
 
-	C4Value() : NextRef(nullptr), Type(C4V_Nil) { Data = 0; }
+	C4Value() : NextRef(nullptr), Type(C4V_Nil) { Data.Int = 0; }
 
 	C4Value(const C4Value &nValue) : Data(nValue.Data), NextRef(nullptr), Type(nValue.Type)
 	{ AddDataRef(); }
@@ -110,13 +122,37 @@ public:
 
 	// Checked getters
 	int32_t getInt() const { return CheckConversion(C4V_Int) ? Data.Int : 0; }
-	bool getBool() const { return CheckConversion(C4V_Bool) ? !! Data : 0; }
+	bool getBool() const
+	{
+		switch (Type)
+		{
+		case C4V_Nil:
+			return false;
+		case C4V_Int:
+		case C4V_Bool:
+			return Data.Int != 0;
+		case C4V_Array:
+		case C4V_String:
+		case C4V_PropList:
+		case C4V_Function:
+			// These values always have a value (otherwise they'd be C4V_Nil)
+			assert(getPointer() != 0);
+			return true;
+		default:
+			assert(!"Unexpected C4Value type in getBool");
+			return false;
+		}
+	}
 	C4Object * getObj() const;
 	C4Def * getDef() const;
 	C4PropList * getPropList() const { return CheckConversion(C4V_PropList) ? Data.PropList : nullptr; }
 	C4String * getStr() const { return CheckConversion(C4V_String) ? Data.Str : nullptr; }
 	C4ValueArray * getArray() const { return CheckConversion(C4V_Array) ? Data.Array : nullptr; }
 	C4AulFunc * getFunction() const { return CheckConversion(C4V_Function) ? Data.Fn : nullptr; }
+	void *getPointer() const
+	{
+		return Data.getPointerByType(Type);
+	}
 
 	// Unchecked getters
 	int32_t _getInt() const { return Data.Int; }
@@ -128,8 +164,8 @@ public:
 	C4AulFunc *_getFunction() const { return Data.Fn; }
 	C4PropList *_getPropList() const { return Data.PropList; }
 
-	bool operator ! () const { return !GetData(); }
-	inline operator const void* () const { return GetData() ? this : 0; }  // To allow use of C4Value in conditions
+	bool operator ! () const { return !getBool(); }
+	explicit operator bool () const { return getBool(); }
 
 	void Set(const C4Value &nValue) { Set(nValue.Data, nValue.Type); }
 
@@ -146,7 +182,29 @@ public:
 	bool operator != (const C4Value& Value2) const;
 
 	// Identical comparison
-	bool IsIdenticalTo(const C4Value &cmp) const { return GetType()==cmp.GetType() && GetData()==cmp.GetData(); }
+	bool IsIdenticalTo(const C4Value &cmp) const
+	{
+		if (GetType() != cmp.GetType())
+			return false;
+		switch (Type)
+		{
+		case C4V_Nil:
+			// Every nil is identical to every other nil
+			return true;
+		case C4V_Int:
+		case C4V_Bool:
+		case C4V_C4ObjectEnum:
+			return _getInt() == cmp._getInt();
+		case C4V_Array:
+		case C4V_String:
+		case C4V_PropList:
+		case C4V_Function:
+			return getPointer() == cmp.getPointer();
+		default:
+			assert(!"Unexpected C4Value type in getBool");
+			return false;
+		}
+	}
 
 	// Change and set Type to int in case it was nil or bool before
 	// Use with care: These don't handle int32_t overflow
@@ -209,8 +267,13 @@ public:
 	// Compilation
 	void CompileFunc(StdCompiler *pComp, C4ValueNumbers *);
 
-	static inline constexpr bool IsNullableType(C4V_Type Type)
+	static inline constexpr bool IsNullableType(const C4V_Type Type)
 	{ return Type == C4V_Int || Type == C4V_Bool; }
+
+	static inline constexpr bool IsInternalType(const C4V_Type Type)
+	{
+		return Type > C4V_Last;
+	}
 
 private:
 	// data
@@ -222,7 +285,7 @@ private:
 	// data type
 	C4V_Type Type;
 
-	void Set(C4V_Data nData, C4V_Type nType);
+	void Set(const C4V_Data &nData, C4V_Type nType);
 
 	void AddDataRef();
 	void DelDataRef(C4V_Data Data, C4V_Type Type, C4Value *pNextRef);
@@ -280,7 +343,7 @@ private:
 ALWAYS_INLINE void C4Value::AddDataRef()
 {
 	assert(Type < C4V_Any);
-	assert(Type != C4V_Nil || !Data);
+	assert(Type != C4V_Nil || !getPointer());
 	switch (Type)
 	{
 	case C4V_PropList:
@@ -303,7 +366,7 @@ ALWAYS_INLINE void C4Value::AddDataRef()
 ALWAYS_INLINE void C4Value::DelDataRef(C4V_Data Data, C4V_Type Type, C4Value *pNextRef)
 {
 	assert(Type < C4V_Any);
-	assert(Type != C4V_Nil || !Data);
+	assert(Type != C4V_Nil || !Data.getPointerByType(Type));
 	// clean up
 	switch (Type)
 	{
@@ -315,10 +378,14 @@ ALWAYS_INLINE void C4Value::DelDataRef(C4V_Data Data, C4V_Type Type, C4Value *pN
 	}
 }
 
-ALWAYS_INLINE void C4Value::Set(C4V_Data nData, C4V_Type nType)
+ALWAYS_INLINE void C4Value::Set(const C4V_Data &nData, C4V_Type nType)
 {
 	// Do not add this to the same linked list twice.
-	if (Data == nData && Type >= C4V_FirstPointer) return;
+	if (Type == nType && Type >= C4V_FirstPointer)
+	{
+		if (getPointer() == nData.getPointerByType(nType))
+			return;
+	}
 
 	C4V_Data oData = Data;
 	C4V_Type oType = Type;
@@ -326,7 +393,9 @@ ALWAYS_INLINE void C4Value::Set(C4V_Data nData, C4V_Type nType)
 
 	// change
 	Data = nData;
-	Type = nData || IsNullableType(nType) ? nType : C4V_Nil;
+	Type = nType;
+	
+	Type = IsNullableType(nType) || IsInternalType(nType) || nData.getPointerByType(nType) != 0 ? nType : C4V_Nil;
 
 	// hold new data & clean up old
 	AddDataRef();
@@ -339,7 +408,7 @@ ALWAYS_INLINE void C4Value::Set0()
 	C4V_Type oType = Type;
 
 	// change
-	Data = 0;
+	Data.Int = 0;
 	Type = C4V_Nil;
 
 	// clean up (save even if Data was 0 before)
@@ -354,7 +423,7 @@ ALWAYS_INLINE C4Value::C4Value(C4Value && nValue) noexcept:
 		Data.PropList->AddRef(this);
 		Data.PropList->DelRef(&nValue, nValue.NextRef);
 	}
-	nValue.Type = C4V_Nil; nValue.Data = 0; nValue.NextRef = nullptr;
+	nValue.Type = C4V_Nil; nValue.Data.Int = 0; nValue.NextRef = nullptr;
 }
 
 #endif

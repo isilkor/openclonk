@@ -138,7 +138,7 @@ StdStrBuf C4Value::GetDataString(int depth, const C4PropListStatic *ignore_refer
 	case C4V_Int:
 		return FormatString("%ld", static_cast<long>(Data.Int));
 	case C4V_Bool:
-		return StdStrBuf(Data ? "true" : "false");
+		return StdStrBuf(getBool() ? "true" : "false");
 	case C4V_PropList:
 	{
 		if (Data.PropList == ScriptEngine.GetPropList())
@@ -196,7 +196,7 @@ StdStrBuf C4Value::ToJSON(int depth, const C4PropListStatic *ignore_reference_pa
 	case C4V_Int:
 		return FormatString("%ld", static_cast<long>(Data.Int));
 	case C4V_Bool:
-		return StdStrBuf(Data ? "true" : "false");
+		return StdStrBuf(getBool() ? "true" : "false");
 	case C4V_PropList:
 	{
 		const C4PropListStatic * Def = Data.PropList->IsStatic();
@@ -289,14 +289,13 @@ void C4ValueNumbers::Denumerate()
 uint32_t C4ValueNumbers::GetNumberForValue(C4Value * v)
 {
 	// This is only used for C4Values containing pointers
-	// Assume that all pointers have the same size
-	if (ValueNumbers.find(v->GetData()) == ValueNumbers.end())
+	if (ValueNumbers.find(v->getPointer()) == ValueNumbers.end())
 	{
 		ValuesToSave.push_back(v);
-		ValueNumbers[v->GetData()] = ValuesToSave.size();
+		ValueNumbers[v->getPointer()] = ValuesToSave.size();
 		return ValuesToSave.size();
 	}
-	return ValueNumbers[v->GetData()];
+	return ValueNumbers[v->getPointer()];
 }
 
 void C4Value::CompileFunc(StdCompiler *pComp, C4ValueNumbers * numbers)
@@ -306,7 +305,7 @@ void C4Value::CompileFunc(StdCompiler *pComp, C4ValueNumbers * numbers)
 	char cC4VID;
 	if (!deserializing)
 	{
-		assert(Type != C4V_Nil || !Data);
+		assert(Type != C4V_Nil || !getPointer());
 		switch (Type)
 		{
 		case C4V_Nil:
@@ -542,13 +541,13 @@ void C4ValueNumbers::CompileFunc(StdCompiler * pComp)
 inline bool ComparisonImpl(const C4Value &Value1, const C4Value &Value2)
 {
 	C4V_Type Type1 = Value1.GetType();
-	C4V_Data Data1 = Value1.GetData();
+	const C4V_Data &Data1 = Value1.GetData();
 	C4V_Type Type2 = Value2.GetType();
-	C4V_Data Data2 = Value2.GetData();
+	const C4V_Data &Data2 = Value2.GetData();
 	switch (Type1)
 	{
 	case C4V_Nil:
-		assert(!Data1);
+		assert(!Data1.Int);
 		return Type1 == Type2;
 	case C4V_Int:
 	case C4V_Bool:
@@ -565,7 +564,7 @@ inline bool ComparisonImpl(const C4Value &Value1, const C4Value &Value2)
 		return Type1 == Type2 && Data1.Fn == Data2.Fn;
 	default:
 		assert(!"Unexpected C4Value type (denumeration missing?)");
-		return Data1 == Data2;
+		return false;
 	}
 }
 

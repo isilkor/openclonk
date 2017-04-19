@@ -147,6 +147,16 @@ TEST_F(AulPredefFunctionTest, CreateEffect)
 	EXPECT_EQ(C4VInt(3), RunScript("local A = { Construction=func() { this.Magicnumber = 3; } }; func Main() { return CreateEffect(A, 1).Magicnumber; }"));
 }
 
+TEST_F(AulPredefFunctionTest, Format)
+{
+	EXPECT_EQ(C4VString("0"), RunExpr("Format(\"%d\", 0)"));
+	EXPECT_EQ(C4VString("hello"), RunExpr("Format(\"%s\", \"hello\")"));
+	EXPECT_EQ(C4VString("hell0"), RunExpr("Format(\"%s%d\", \"hell\", 0)"));
+
+	// Ensure that Format() throws when formatting 0 as a string
+	EXPECT_THROW(RunExpr("Format(\"%s\", 0)"), C4AulExecError);
+}
+
 TEST_F(AulPredefFunctionTest, ParseInt)
 {
 	auto ParseInt = [this](const std::string &value) { return RunExpr("ParseInt(\"" + value + "\")"); };

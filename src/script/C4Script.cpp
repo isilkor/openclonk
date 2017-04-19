@@ -83,7 +83,7 @@ StdStrBuf FnStringFormat(C4PropList * _this, C4String *szFormatPar, C4Value * Pa
 				// get string
 				if (cPar >= ParCount) throw C4AulExecError("format placeholder without parameter");
 				const char *szStr = "(null)";
-				if (Pars[cPar].GetData())
+				if (Pars[cPar].GetType() != C4V_Nil)
 				{
 					C4String * pStr = Pars[cPar].getStr();
 					if (!pStr) throw C4AulExecError("string format placeholder without string");

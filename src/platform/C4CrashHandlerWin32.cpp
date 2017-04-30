@@ -25,13 +25,8 @@
 #include "C4Version.h"
 #include "platform/C4windowswrapper.h"
 #include <dbghelp.h>
-#include <fcntl.h>
-#include <string.h>
 #include <tlhelp32.h>
-#ifdef HAVE_INTTYPES_H
-#include <inttypes.h>
-#endif
-#include <assert.h>
+#include <cinttypes>
 #if defined(__CRT_WIDE) || (defined(_MSC_VER) && _MSC_VER >= 1900)
 #define USE_WIDE_ASSERT
 #endif

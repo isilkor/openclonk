@@ -15,12 +15,6 @@
  */
 
 #include "C4Include.h"
-
-#ifdef _MSC_VER
-# define _USE_MATH_DEFINES
-# include <math.h>
-#endif
-
 #include "lib/StdMeshMath.h"
 
 StdMeshVector StdMeshVector::Zero()

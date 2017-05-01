@@ -16,11 +16,6 @@
 #include "C4Include.h"
 #include "lib/StdCompiler.h"
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <ctype.h>
-#include "lib/C4Log.h"
-
 // *** StdCompiler
 
 void StdCompiler::Warn(const char *szWarning, ...)

@@ -15,23 +15,16 @@
  */
 #include "C4Include.h"
 #include "lib/StdBuf.h"
+
 #include "lib/StdCompiler.h"
 #include "lib/StdAdaptors.h"
-#include "platform/StdFile.h"
 
-#include <stdarg.h>
-#include <stdio.h>
 #ifdef _WIN32
-#include <io.h>
 #include "platform/C4windowswrapper.h"
 #else
 #define O_BINARY 0
 #define O_SEQUENTIAL 0
-#include <unistd.h>
-#include <stdlib.h>
 #endif
-#include <ctype.h>
-#include <fcntl.h>
 #include <sys/stat.h>
 
 // *** StdBuf

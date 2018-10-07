@@ -125,7 +125,6 @@ Get-Item *.vcxproj | %{
     }
 }
 
-if ($env:DEPLOYMENT_URL -and $env:DEPLOYMENT_SECRET) {
     # Build a zip file with the main executable and its dependencies
     $deploy_dir = "${env:BUILD_TARGET_FOLDER}\deployment"
     [void](mkdir $deploy_dir)
@@ -153,7 +152,7 @@ if ($env:DEPLOYMENT_URL -and $env:DEPLOYMENT_SECRET) {
     while ($unresolved.Count -gt 0) {
         $library = $unresolved.Dequeue()
         $file = Join-Path $deploy_dir $library
-        $dep_file = "${env:BUILD_DEPS_FOLDER}\bin\${library}"
+        $dep_file = "${env:BUILD_DEPS_FOLDER}\${env:PLATFORM}\bin\${library}"
         if (-not (Test-Path $file) -and (Test-Path $dep_file)) {
             Write-Host "Bundling ${library}"
             Copy-Item $dep_file $file
@@ -168,6 +167,7 @@ if ($env:DEPLOYMENT_URL -and $env:DEPLOYMENT_SECRET) {
     $archive_name = "OpenClonk-win-${env:PLATFORM}.zip"
     7z a -mx=9 -y -r -- $archive_name "${deploy_dir}\*"
 
+if ($env:DEPLOYMENT_URL -and $env:DEPLOYMENT_SECRET) {
     $deployment_user, $deployment_password = $env:DEPLOYMENT_SECRET.Split(':', 2)
     $timestamp = Get-Date -Date (Get-Date $env:APPVEYOR_REPO_COMMIT_TIMESTAMP).ToUniversalTime() -UFormat '%Y-%m-%dT%H:%M:%SZ'
     $deployment_url = [System.UriBuilder]::new("${env:DEPLOYMENT_URL}${timestamp}-${env:APPVEYOR_REPO_BRANCH}-$($env:APPVEYOR_REPO_COMMIT.Substring(0, 9))/${archive_name}")
